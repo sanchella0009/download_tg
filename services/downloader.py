@@ -39,7 +39,11 @@ def _apply_js_runtimes(ydl_opts: dict) -> dict:
 
 def _apply_remote_components(ydl_opts: dict) -> dict:
     if YTDLP_REMOTE_COMPONENTS:
-        ydl_opts['remote_components'] = YTDLP_REMOTE_COMPONENTS
+        if isinstance(YTDLP_REMOTE_COMPONENTS, str):
+            parts = [p.strip() for p in YTDLP_REMOTE_COMPONENTS.split(",") if p.strip()]
+            ydl_opts['remote_components'] = parts
+        else:
+            ydl_opts['remote_components'] = YTDLP_REMOTE_COMPONENTS
     return ydl_opts
 
 def _youtube_format(target_height: Optional[int]) -> str:
