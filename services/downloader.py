@@ -108,7 +108,7 @@ def get_ydl_opts(
         })))
     
     if re.search(r"instagram\.com", url, re.IGNORECASE):
-    return _apply_remote_components(_apply_js_runtimes({**base_opts, 'format': 'bv*+ba/b'}))
+        return _apply_remote_components(_apply_js_runtimes({**base_opts, 'format': 'bv*+ba/b'}))
     
     if re.search(r"(x\.com|twitter\.com)", url, re.IGNORECASE):
         return _apply_remote_components(_apply_js_runtimes({
