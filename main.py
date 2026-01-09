@@ -11,7 +11,7 @@ from aiogram.filters import Command
 from aiogram.enums import ParseMode
 from config import BOT_TOKEN, TELEGRAM_API_URL
 from handlers.base import handle_links, start
-from handlers.inline import handle_inline_query, handle_inline_callback
+from handlers.inline import handle_inline_query, handle_chosen_inline_result
 from handlers.youtube import handle_youtube_choice
 from services.selenium import twitter_parser
 
@@ -65,7 +65,7 @@ async def main():
     dp.message.register(handle_links)
     dp.callback_query.register(handle_youtube_choice, F.data.startswith("ytq:"))
     dp.inline_query.register(handle_inline_query)
-    dp.callback_query.register(handle_inline_callback, F.data.startswith("inl:"))
+    dp.chosen_inline_result.register(handle_chosen_inline_result)
 
     # События запуска/остановки
     dp.startup.register(on_startup)

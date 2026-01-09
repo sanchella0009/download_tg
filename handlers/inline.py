@@ -10,9 +10,8 @@ from aiogram.types import (
     InlineQuery,
     InlineQueryResultArticle,
     InputTextMessageContent,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-    CallbackQuery,
+    ChosenInlineResult,
+    InputMediaVideo,
     FSInputFile,
 )
 
@@ -60,29 +59,6 @@ def _extract_url(text: str) -> Optional[str]:
     return url.rstrip(").,!?\"'")
 
 
-def _build_send_keyboard(token: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="Отправить видео", callback_data=f"inl:send:{token}")]
-        ]
-    )
-
-
-def _build_youtube_keyboard(token: str, resolutions: List[tuple[int, int]]) -> InlineKeyboardMarkup:
-    buttons = []
-    row: List[InlineKeyboardButton] = []
-    for width, height in resolutions:
-        row.append(
-            InlineKeyboardButton(text=f"{height}p", callback_data=f"inl:yt:{token}:{height}")
-        )
-        if len(row) == 3:
-            buttons.append(row)
-            row = []
-    if row:
-        buttons.append(row)
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-
 async def handle_inline_query(inline_query: InlineQuery) -> None:
     query_text = (inline_query.query or "").strip()
     url = _extract_url(query_text)
@@ -123,16 +99,18 @@ async def handle_inline_query(inline_query: InlineQuery) -> None:
             ]
 
         available = sorted(set(available), key=lambda r: (r[1], r[0]))
-        keyboard = _build_youtube_keyboard(token, available)
-        results = [
-            InlineQueryResultArticle(
-                id=token,
-                title="YouTube: выбрать качество",
-                description="Нажмите и выберите качество",
-                input_message_content=InputTextMessageContent(message_text="Выберите качество для YouTube:"),
-                reply_markup=keyboard,
+        results = []
+        for _, height in available:
+            results.append(
+                InlineQueryResultArticle(
+                    id=f"yt:{token}:{height}",
+                    title=f"YouTube {height}p",
+                    description=f"Отправить видео в {height}p",
+                    input_message_content=InputTextMessageContent(
+                        message_text=f"⏳ Скачиваю YouTube {height}p..."
+                    ),
+                )
             )
-        ]
         await inline_query.answer(results=results, cache_time=1, is_personal=True)
         return
 
@@ -152,64 +130,57 @@ async def handle_inline_query(inline_query: InlineQuery) -> None:
     token = _store_inline_request(url, inline_query.from_user.id)
     results = [
         InlineQueryResultArticle(
-            id=token,
+            id=f"send:{token}",
             title="Отправить видео",
             description=url,
             input_message_content=InputTextMessageContent(
-                message_text="Нажмите кнопку ниже, чтобы отправить видео."
+                message_text="⏳ Скачиваю видео..."
             ),
-            reply_markup=_build_send_keyboard(token),
         )
     ]
     await inline_query.answer(results=results, cache_time=1, is_personal=True)
 
 
-async def handle_inline_callback(callback: CallbackQuery) -> None:
-    if not callback.data:
+async def handle_chosen_inline_result(chosen: ChosenInlineResult) -> None:
+    if not chosen.result_id or not chosen.inline_message_id:
         return
 
-    parts = callback.data.split(":")
-    if len(parts) < 3 or parts[0] != "inl":
+    parts = chosen.result_id.split(":")
+    if len(parts) < 2:
         return
 
-    action = parts[1]
-    token = parts[2]
-
-    url = _pop_inline_request(token, callback.from_user.id)
-    if not url:
-        await callback.answer("Ссылка устарела, отправьте заново", show_alert=True)
-        return
-
-    await callback.answer()
-    if not callback.message:
-        return
-
+    action = parts[0]
+    token = parts[1]
+    selected_height: Optional[int] = None
     if action == "yt":
-        if len(parts) < 4:
-            await callback.message.edit_text("❌ Некорректный выбор качества")
+        if len(parts) < 3:
             return
         try:
-            selected_height = int(parts[3])
+            selected_height = int(parts[2])
         except ValueError:
-            await callback.message.edit_text("❌ Некорректный выбор качества")
             return
-        await _send_downloaded_video(callback, url, youtube_target_height=selected_height)
+
+    url = _pop_inline_request(token, chosen.from_user.id)
+    if not url:
         return
 
-    if action == "send":
-        await _send_downloaded_video(callback, url)
-        return
+    await _send_downloaded_video_inline(
+        chosen,
+        url,
+        youtube_target_height=selected_height
+    )
 
 
-async def _send_downloaded_video(
-    callback: CallbackQuery,
+async def _send_downloaded_video_inline(
+    chosen: ChosenInlineResult,
     url: str,
     youtube_target_height: Optional[int] = None
 ) -> None:
-    if not callback.message:
+    bot = chosen.bot
+    inline_message_id = chosen.inline_message_id
+    if not inline_message_id:
         return
 
-    await callback.message.edit_text("⏳ Скачиваю видео...")
     file_path = None
     try:
         if re.search(PLATFORMS["twitter"], url, re.IGNORECASE):
@@ -220,17 +191,57 @@ async def _send_downloaded_video(
             file_path = await download_video(url, youtube_target_height=youtube_target_height)
 
         video_size = await get_video_dimensions(file_path)
-        await callback.message.answer_video(
-            video=FSInputFile(file_path),
-            caption="Ваше видео готово!",
-            supports_streaming=True,
-            width=video_size[0] if video_size else None,
-            height=video_size[1] if video_size else None
+        file_id = await _upload_for_inline(
+            bot,
+            chosen.from_user.id,
+            file_path,
+            video_size
         )
-        await callback.message.edit_text("✅ Готово")
+        if not file_id:
+            await bot.edit_message_text(
+                inline_message_id=inline_message_id,
+                text="❌ Не удалось отправить видео. Откройте бота и попробуйте снова."
+            )
+            return
+
+        await bot.edit_message_media(
+            inline_message_id=inline_message_id,
+            media=InputMediaVideo(
+                media=file_id,
+                caption="Ваше видео готово!"
+            )
+        )
     except Exception as e:
         logger.error(f"Inline download failed: {str(e)}", exc_info=True)
-        await callback.message.edit_text(f"❌ Ошибка: {str(e)}")
+        await bot.edit_message_text(
+            inline_message_id=inline_message_id,
+            text=f"❌ Ошибка: {str(e)}"
+        )
     finally:
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
+
+
+async def _upload_for_inline(
+    bot,
+    user_id: int,
+    file_path: str,
+    video_size: Optional[tuple[int, int]]
+) -> Optional[str]:
+    width = video_size[0] if video_size else None
+    height = video_size[1] if video_size else None
+    try:
+        msg = await bot.send_video(
+            chat_id=user_id,
+            video=FSInputFile(file_path),
+            caption="Ваше видео готово!",
+            supports_streaming=True,
+            width=width,
+            height=height
+        )
+        file_id = msg.video.file_id if msg.video else None
+        await bot.delete_message(chat_id=user_id, message_id=msg.message_id)
+        return file_id
+    except Exception as e:
+        logger.error(f"Inline upload failed: {str(e)}", exc_info=True)
+        return None
