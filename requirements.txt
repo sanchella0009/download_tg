@@ -1,0 +1,7 @@
+aiogram
+yt-dlp
+ffmpeg-python
+python-dotenv
+instaloader
+selenium
+webdriver_manager

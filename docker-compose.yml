@@ -1,0 +1,30 @@
+services: 
+  bot:
+    build: .
+    container_name: video-download-bot
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - TELEGRAM_API_URL=http://tg-bot-api:8081
+      - MAX_FILE_SIZE=2147483648
+      - MAX_TELEGRAM_VIDEO_SIZE=2000
+      - YTDLP_JS_RUNTIMES=nodejs
+    volumes:
+      - ./downloads:/app/downloads
+      - ./bot.db:/app/bot.db
+    depends_on:
+      - tg-bot-api
+
+  tg-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    container_name: tg-bot-api
+    environment:
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - TELEGRAM_LOCAL=true
+    volumes:
+      - ./telegram-bot-api-data:/var/lib/telegram-bot-api
+    ports:
+      - "8081:8081"
+    restart: always
