@@ -25,11 +25,9 @@ cd download_tg
 
 ```env
 BOT_TOKEN=your_telegram_bot_token
-
-# Опционально: локальный Telegram Bot API
 TELEGRAM_API_URL=http://localhost:8081
-TELEGRAM_API_ID=your_api_id
-TELEGRAM_API_HASH=your_api_hash
+TELEGRAM_API_ID=your_api_id # получить на https://my.telegram.org/apps
+TELEGRAM_API_HASH=your_api_hash # получить на https://my.telegram.org/apps
 ```
 
 ### 3. Запуск бота
