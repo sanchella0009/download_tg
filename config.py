@@ -31,6 +31,7 @@ TELEGRAM_API_URL: str = os.getenv('TELEGRAM_API_URL', '').strip()
 INLINE_PLACEHOLDER_VIDEO_ID: str = os.getenv('INLINE_PLACEHOLDER_VIDEO_ID', '').strip()
 INLINE_UPLOAD_CHAT_ID: str = os.getenv('INLINE_UPLOAD_CHAT_ID', '').strip()
 INLINE_UPLOAD_CHAT_ID = int(INLINE_UPLOAD_CHAT_ID) if INLINE_UPLOAD_CHAT_ID else None
+YTDLP_REMOTE_COMPONENTS: str = os.getenv('YTDLP_REMOTE_COMPONENTS', 'ejs:github').strip()
 
 if os.getenv('YTDLP_JS_RUNTIMES'):
     normalized = os.getenv('YTDLP_JS_RUNTIMES', '')

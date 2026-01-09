@@ -8,7 +8,7 @@ import time
 import re
 import logging
 from typing import Callable, Optional
-from config import DOWNLOAD_DIR, MAX_FILE_SIZE, PLATFORMS
+from config import DOWNLOAD_DIR, MAX_FILE_SIZE, PLATFORMS, YTDLP_REMOTE_COMPONENTS
 from services.utils import compress_video
 from yt_dlp import YoutubeDL
 from selenium import webdriver
@@ -35,6 +35,11 @@ def _apply_js_runtimes(ydl_opts: dict) -> dict:
             else:
                 runtimes[name] = {}
         ydl_opts['js_runtimes'] = runtimes
+    return ydl_opts
+
+def _apply_remote_components(ydl_opts: dict) -> dict:
+    if YTDLP_REMOTE_COMPONENTS:
+        ydl_opts['remote_components'] = YTDLP_REMOTE_COMPONENTS
     return ydl_opts
 
 def _youtube_format(target_height: Optional[int]) -> str:
@@ -79,28 +84,28 @@ def get_ydl_opts(
                 }],
             }
             audio_opts.pop('merge_output_format', None)
-            return _apply_js_runtimes(audio_opts)
-        return _apply_js_runtimes({
-            **base_opts,
-            'format': _youtube_format(youtube_target_height)
-        })
+        return _apply_remote_components(_apply_js_runtimes(audio_opts))
+    return _apply_remote_components(_apply_js_runtimes({
+        **base_opts,
+        'format': _youtube_format(youtube_target_height)
+    }))
     
     if re.search(r"instagram\.com", url, re.IGNORECASE):
-        return _apply_js_runtimes({**base_opts, 'format': 'bv*+ba/b'})
+    return _apply_remote_components(_apply_js_runtimes({**base_opts, 'format': 'bv*+ba/b'}))
     
     if re.search(r"(x\.com|twitter\.com)", url, re.IGNORECASE):
-        return _apply_js_runtimes({
-            **base_opts,
-            'format': 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b',
-            'extractor_args': {'twitter': {'username': None, 'password': None}}
-        })
+    return _apply_remote_components(_apply_js_runtimes({
+        **base_opts,
+        'format': 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b',
+        'extractor_args': {'twitter': {'username': None, 'password': None}}
+    }))
     
     # Для всех остальных платформ
-    return _apply_js_runtimes(base_opts)
+    return _apply_remote_components(_apply_js_runtimes(base_opts))
 
 def get_vk_ydl_opts():
     """Оптимальные настройки для VK"""
-    return _apply_js_runtimes({
+    return _apply_remote_components(_apply_js_runtimes({
         'outtmpl': os.path.join(DOWNLOAD_DIR, 'vk_%(id)s.%(ext)s'),
         'quiet': False,
         'no_warnings': False,
@@ -118,14 +123,14 @@ def get_vk_ydl_opts():
         'merge_output_format': 'mp4',
         'windows_filenames': True,
         'restrictfilenames': True
-    })
+    }))
 
 def get_youtube_resolutions(url: str) -> list[tuple[int, int]]:
     """Возвращает список доступных разрешений видео для YouTube"""
-    ydl_opts = _apply_js_runtimes({
+    ydl_opts = _apply_remote_components(_apply_js_runtimes({
         'quiet': True,
         'skip_download': True,
-    })
+    }))
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
 
@@ -197,7 +202,7 @@ def _download_video_sync(url: str, ydl_opts: dict, youtube_audio_only: bool) -> 
 
 async def download_twitter_video(url: str) -> str:
     """Улучшенное скачивание Twitter видео"""
-    ydl_opts = _apply_js_runtimes({
+    ydl_opts = _apply_remote_components(_apply_js_runtimes({
         'outtmpl': 'downloads/twitter_%(id)s.%(ext)s',
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         'retries': 5,
@@ -209,7 +214,7 @@ async def download_twitter_video(url: str) -> str:
             }
         },
         'logger': logging.getLogger('yt-dlp'),
-    })
+    }))
     
     try:
         # Сначала пробуем стандартный метод
