@@ -84,21 +84,21 @@ def get_ydl_opts(
                 }],
             }
             audio_opts.pop('merge_output_format', None)
-        return _apply_remote_components(_apply_js_runtimes(audio_opts))
-    return _apply_remote_components(_apply_js_runtimes({
-        **base_opts,
-        'format': _youtube_format(youtube_target_height)
-    }))
+            return _apply_remote_components(_apply_js_runtimes(audio_opts))
+        return _apply_remote_components(_apply_js_runtimes({
+            **base_opts,
+            'format': _youtube_format(youtube_target_height)
+        }))
     
     if re.search(r"instagram\.com", url, re.IGNORECASE):
-    return _apply_remote_components(_apply_js_runtimes({**base_opts, 'format': 'bv*+ba/b'}))
+        return _apply_remote_components(_apply_js_runtimes({**base_opts, 'format': 'bv*+ba/b'}))
     
     if re.search(r"(x\.com|twitter\.com)", url, re.IGNORECASE):
-    return _apply_remote_components(_apply_js_runtimes({
-        **base_opts,
-        'format': 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b',
-        'extractor_args': {'twitter': {'username': None, 'password': None}}
-    }))
+        return _apply_remote_components(_apply_js_runtimes({
+            **base_opts,
+            'format': 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b',
+            'extractor_args': {'twitter': {'username': None, 'password': None}}
+        }))
     
     # Для всех остальных платформ
     return _apply_remote_components(_apply_js_runtimes(base_opts))
