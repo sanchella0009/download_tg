@@ -24,7 +24,16 @@ def _apply_js_runtimes(ydl_opts: dict) -> dict:
     if js_runtimes:
         runtimes = {}
         for runtime in (r.strip() for r in js_runtimes.split(',') if r.strip()):
-            runtimes[runtime] = {}
+            name, _, path = runtime.partition(':')
+            name = name.strip().lower()
+            if name == 'nodejs':
+                name = 'node'
+            if not name:
+                continue
+            if path:
+                runtimes[name] = {'path': path}
+            else:
+                runtimes[name] = {}
         ydl_opts['js_runtimes'] = runtimes
     return ydl_opts
 

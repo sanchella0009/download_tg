@@ -28,6 +28,14 @@ SELENIUM_REMOTE_URL: str = os.getenv('SELENIUM_REMOTE_URL', '')
 TWITTER_USERNAME: str = os.getenv('TWITTER_USERNAME', '')
 TWITTER_PASSWORD: str = os.getenv('TWITTER_PASSWORD', '')
 TELEGRAM_API_URL: str = os.getenv('TELEGRAM_API_URL', '').strip()
+INLINE_PLACEHOLDER_VIDEO_ID: str = os.getenv('INLINE_PLACEHOLDER_VIDEO_ID', '').strip()
+INLINE_UPLOAD_CHAT_ID: str = os.getenv('INLINE_UPLOAD_CHAT_ID', '').strip()
+INLINE_UPLOAD_CHAT_ID = int(INLINE_UPLOAD_CHAT_ID) if INLINE_UPLOAD_CHAT_ID else None
+
+if os.getenv('YTDLP_JS_RUNTIMES'):
+    normalized = os.getenv('YTDLP_JS_RUNTIMES', '')
+    normalized = normalized.replace('nodejs', 'node')
+    os.environ['YTDLP_JS_RUNTIMES'] = normalized
 
 # Поддерживаемые платформы
 PLATFORMS = {
