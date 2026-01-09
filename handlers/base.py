@@ -29,6 +29,8 @@ async def start(message: Message):
     )
 
 async def handle_links(message: Message):
+    if not message.text:
+        return
     url = message.text.strip()
     try:
         # if re.search(PLATFORMS["dzen"], url, re.IGNORECASE):
