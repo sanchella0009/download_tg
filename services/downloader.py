@@ -8,7 +8,7 @@ import time
 import re
 import logging
 from typing import Callable, Optional
-from config import DOWNLOAD_DIR, MAX_FILE_SIZE, PLATFORMS, YTDLP_REMOTE_COMPONENTS
+from config import DOWNLOAD_DIR, MAX_FILE_SIZE, PLATFORMS, YTDLP_REMOTE_COMPONENTS, YTDLP_YOUTUBE_CLIENT
 from services.utils import compress_video
 from yt_dlp import YoutubeDL
 from selenium import webdriver
@@ -44,6 +44,19 @@ def _apply_remote_components(ydl_opts: dict) -> dict:
             ydl_opts['remote_components'] = parts
         else:
             ydl_opts['remote_components'] = YTDLP_REMOTE_COMPONENTS
+    return ydl_opts
+
+def _apply_youtube_client(ydl_opts: dict) -> dict:
+    if not YTDLP_YOUTUBE_CLIENT:
+        return ydl_opts
+    clients = [c.strip() for c in YTDLP_YOUTUBE_CLIENT.split(",") if c.strip()]
+    if not clients:
+        return ydl_opts
+    extractor_args = ydl_opts.get('extractor_args', {})
+    youtube_args = extractor_args.get('youtube', {})
+    youtube_args['player_client'] = clients
+    extractor_args['youtube'] = youtube_args
+    ydl_opts['extractor_args'] = extractor_args
     return ydl_opts
 
 def _youtube_format(target_height: Optional[int]) -> str:
@@ -88,14 +101,14 @@ def get_ydl_opts(
                 }],
             }
             audio_opts.pop('merge_output_format', None)
-            return _apply_remote_components(_apply_js_runtimes(audio_opts))
-        return _apply_remote_components(_apply_js_runtimes({
+            return _apply_youtube_client(_apply_remote_components(_apply_js_runtimes(audio_opts)))
+        return _apply_youtube_client(_apply_remote_components(_apply_js_runtimes({
             **base_opts,
             'format': _youtube_format(youtube_target_height)
-        }))
+        })))
     
     if re.search(r"instagram\.com", url, re.IGNORECASE):
-        return _apply_remote_components(_apply_js_runtimes({**base_opts, 'format': 'bv*+ba/b'}))
+    return _apply_remote_components(_apply_js_runtimes({**base_opts, 'format': 'bv*+ba/b'}))
     
     if re.search(r"(x\.com|twitter\.com)", url, re.IGNORECASE):
         return _apply_remote_components(_apply_js_runtimes({
@@ -131,10 +144,10 @@ def get_vk_ydl_opts():
 
 def get_youtube_resolutions(url: str) -> list[tuple[int, int]]:
     """Возвращает список доступных разрешений видео для YouTube"""
-    ydl_opts = _apply_remote_components(_apply_js_runtimes({
+    ydl_opts = _apply_youtube_client(_apply_remote_components(_apply_js_runtimes({
         'quiet': True,
         'skip_download': True,
-    }))
+    })))
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
 
