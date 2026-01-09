@@ -32,11 +32,13 @@ INLINE_PLACEHOLDER_VIDEO_ID: str = os.getenv('INLINE_PLACEHOLDER_VIDEO_ID', '').
 INLINE_UPLOAD_CHAT_ID: str = os.getenv('INLINE_UPLOAD_CHAT_ID', '').strip()
 INLINE_UPLOAD_CHAT_ID = int(INLINE_UPLOAD_CHAT_ID) if INLINE_UPLOAD_CHAT_ID else None
 YTDLP_REMOTE_COMPONENTS: str = os.getenv('YTDLP_REMOTE_COMPONENTS', 'ejs:github').strip()
-YTDLP_YOUTUBE_CLIENT: str = os.getenv('YTDLP_YOUTUBE_CLIENT', 'web,ios').strip()
+YTDLP_YOUTUBE_CLIENT: str = os.getenv('YTDLP_YOUTUBE_CLIENT', 'web').strip()
 
-if os.getenv('YTDLP_JS_RUNTIMES'):
-    normalized = os.getenv('YTDLP_JS_RUNTIMES', '')
-    normalized = normalized.replace('nodejs', 'node')
+raw_runtimes = os.getenv('YTDLP_JS_RUNTIMES')
+if raw_runtimes is None or not raw_runtimes.strip():
+    os.environ['YTDLP_JS_RUNTIMES'] = 'node'
+else:
+    normalized = raw_runtimes.replace('nodejs', 'node')
     os.environ['YTDLP_JS_RUNTIMES'] = normalized
 
 # Поддерживаемые платформы
