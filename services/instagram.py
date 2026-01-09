@@ -76,6 +76,8 @@ class InstagramDownloader:
             
             # Загрузка контента
             media_files, status = await self._download_content_raw(url)
+            if media_files:
+                media_files = await self._trim_intro_covers(media_files)
             result['media'] = media_files
             
             if not media_files:
@@ -101,6 +103,143 @@ class InstagramDownloader:
         except Exception as e:
             logger.error(f"Download content failed: {str(e)}")
             return {'media': [], 'text': []}, f"Error: {str(e)}"
+
+    async def _trim_intro_covers(self, media_files: List[str]) -> List[str]:
+        """Обрезает статичную обложку + тишину в начале видео."""
+        trimmed_files: List[str] = []
+        for file_path in media_files:
+            if not file_path.lower().endswith(('.mp4', '.mov')):
+                trimmed_files.append(file_path)
+                continue
+
+            trimmed_path = await self._trim_intro_if_needed(file_path)
+            if trimmed_path and trimmed_path != file_path:
+                await self._safe_remove_file(file_path)
+                trimmed_files.append(trimmed_path)
+            else:
+                trimmed_files.append(file_path)
+        return trimmed_files
+
+    async def _trim_intro_if_needed(self, file_path: str) -> Optional[str]:
+        """Обрезает стартовую статику/тишину, оставляя 0.5с подушки."""
+        try:
+            trim_start = await self._detect_intro_trim_start(file_path)
+            if trim_start is None or trim_start <= 0:
+                return file_path
+
+            duration = await self._get_video_duration(file_path)
+            if duration and trim_start >= max(duration - 0.25, 0):
+                return file_path
+
+            output_path = self._safe_path(
+                f"{os.path.splitext(file_path)[0]}_trimmed.mp4"
+            )
+            cmd = [
+                FFMPEG_PATH,
+                '-ss', f"{trim_start:.3f}",
+                '-i', self._safe_path(file_path),
+                '-c', 'copy',
+                '-movflags', '+faststart',
+                '-y',
+                output_path
+            ]
+            process = await asyncio.create_subprocess_exec(*cmd)
+            await process.wait()
+
+            if process.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                return output_path
+            return file_path
+        except Exception as e:
+            logger.error(f"Intro trim failed: {str(e)}")
+            return file_path
+
+    async def _detect_intro_trim_start(self, file_path: str) -> Optional[float]:
+        """Ищет момент, когда видео/аудио 'просыпается', и дает -0.5с подушку."""
+        silence_end = await self._detect_silence_end(file_path)
+        freeze_end = await self._detect_freeze_end(file_path)
+
+        candidates = [t for t in (silence_end, freeze_end) if t is not None]
+        if not candidates:
+            return None
+
+        trim_point = max(candidates)
+        if trim_point <= 0.05:
+            return None
+
+        return max(trim_point - 0.5, 0.0)
+
+    async def _detect_silence_end(self, file_path: str) -> Optional[float]:
+        cmd = [
+            FFMPEG_PATH,
+            '-i', self._safe_path(file_path),
+            '-af', 'silencedetect=n=-45dB:d=0.2',
+            '-f', 'null',
+            '-'
+        ]
+        log_text = await self._run_ffmpeg_detect(cmd)
+        if not log_text:
+            return None
+        return self._parse_silence_end(log_text)
+
+    async def _detect_freeze_end(self, file_path: str) -> Optional[float]:
+        cmd = [
+            FFMPEG_PATH,
+            '-i', self._safe_path(file_path),
+            '-vf', 'freezedetect=n=0.003:d=0.2',
+            '-f', 'null',
+            '-'
+        ]
+        log_text = await self._run_ffmpeg_detect(cmd)
+        if not log_text:
+            return None
+        return self._parse_freeze_end(log_text)
+
+    async def _run_ffmpeg_detect(self, cmd: List[str]) -> Optional[str]:
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE
+        )
+        _, stderr = await process.communicate()
+        if process.returncode != 0:
+            return None
+        return stderr.decode(errors='ignore')
+
+    def _parse_silence_end(self, log_text: str) -> Optional[float]:
+        silence_start_re = re.compile(r"silence_start: (\d+(?:\.\d+)?)")
+        silence_end_re = re.compile(r"silence_end: (\d+(?:\.\d+)?)")
+        in_silence = False
+
+        for line in log_text.splitlines():
+            start_match = silence_start_re.search(line)
+            if start_match:
+                start = float(start_match.group(1))
+                in_silence = start <= 0.05
+                continue
+
+            if in_silence:
+                end_match = silence_end_re.search(line)
+                if end_match:
+                    return float(end_match.group(1))
+        return None
+
+    def _parse_freeze_end(self, log_text: str) -> Optional[float]:
+        freeze_start_re = re.compile(r"freeze_start: (\d+(?:\.\d+)?)")
+        freeze_end_re = re.compile(r"freeze_end: (\d+(?:\.\d+)?)")
+        in_freeze = False
+
+        for line in log_text.splitlines():
+            start_match = freeze_start_re.search(line)
+            if start_match:
+                start = float(start_match.group(1))
+                in_freeze = start <= 0.05
+                continue
+
+            if in_freeze:
+                end_match = freeze_end_re.search(line)
+                if end_match:
+                    return float(end_match.group(1))
+        return None
 
     def _check_disk_space(self):
         """Проверяет доступное место на диске"""
